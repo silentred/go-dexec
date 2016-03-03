@@ -103,7 +103,15 @@ func (s *CmdTestSuite) TestDoubleStart(c *C) {
 	_ = cmd.Start()
 	err := cmd.Start()
 	c.Assert(err, NotNil)
-	c.Assert(err.Error(), Equals, "dexec: already started")
+	c.Assert(err, Equals, dexec.ErrAlreadyStarted)
+}
+
+func (s *CmdTestSuite) TestWaitBeforestart(c *C) {
+	cmd := s.d.Command(baseContainer(c), "echo")
+
+	err := cmd.Wait()
+	c.Assert(err, NotNil)
+	c.Assert(err, Equals, dexec.ErrNotStarted)
 }
 
 func (s *CmdTestSuite) TestDirAlreadySet(c *C) {
@@ -116,6 +124,28 @@ func (s *CmdTestSuite) TestDirAlreadySet(c *C) {
 	cmd.Dir = "/"
 	err = cmd.Start()
 	c.Assert(err, Equals, dexec.ErrDirSet)
+}
+
+func (s *CmdTestSuite) TestEntrypointAlreadySet(c *C) {
+	opts := baseOpts()
+	opts.Config.Entrypoint = []string{"date"}
+	e, err := dexec.ByCreatingContainer(opts)
+	c.Assert(err, IsNil)
+
+	cmd := s.d.Command(e, "echo")
+	err = cmd.Start()
+	c.Assert(err, ErrorMatches, "dexec: Config.Entrypoint already set")
+}
+
+func (s *CmdTestSuite) TestCmdAlreadySet(c *C) {
+	opts := baseOpts()
+	opts.Config.Cmd = []string{"date", "-u"}
+	e, err := dexec.ByCreatingContainer(opts)
+	c.Assert(err, IsNil)
+
+	cmd := s.d.Command(e, "echo")
+	err = cmd.Start()
+	c.Assert(err, ErrorMatches, "dexec: Config.Cmd already set")
 }
 
 func (s *CmdTestSuite) TestDefaultHandles(c *C) {
@@ -167,4 +197,29 @@ jumped`
 	err := cmd.Run()
 	c.Assert(err, IsNil)
 	c.Assert(string(b.Bytes()), Equals, in)
+}
+
+func (s *CmdTestSuite) TestRunWithDir(c *C) {
+	cmd := s.d.Command(baseContainer(c), "pwd")
+	cmd.Dir = "/tmp"
+
+	var b bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &b, &b
+	err := cmd.Run()
+	c.Assert(err, IsNil)
+	c.Assert(string(b.Bytes()), Equals, cmd.Dir+"\n")
+}
+
+func (s *CmdTestSuite) TestRunWithEnv(c *C) {
+	cmd := s.d.Command(baseContainer(c), "env")
+	cmd.Env = []string{"A=B", "C=D"}
+
+	var b bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &b, &b
+	err := cmd.Run()
+	c.Assert(err, IsNil)
+
+	out := string(b.Bytes())
+	c.Assert(strings.Contains(out, "A=B\n"), Equals, true)
+	c.Assert(strings.Contains(out, "C=D\n"), Equals, true)
 }

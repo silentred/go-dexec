@@ -42,10 +42,16 @@ type Cmd struct {
 
 	// Stdin specifies the process's standard input.
 	// If Stdin is nil, the process reads from the null device (os.DevNull).
+	//
+	// Run will not close the underlying handle if the Reader is an *os.File
+	// differently than os/exec.
 	Stdin io.Reader
 
 	// Stdout and Stderr specify the process's standard output and error.
 	// If either is nil, they will be redirected to the null device (os.DevNull).
+	//
+	// Run will not close the underlying handles if they are *os.File differently
+	// than os/exec.
 	//
 	// TODO concurrency guarantees around calls to Write() if Stdout==Stderr
 	Stdout io.Writer

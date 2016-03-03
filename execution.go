@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	ErrEnvSet = errors.New("dexec: createContainer.Config.Env already set")
-	ErrDirSet = errors.New("dexec: createContainer.Config.WorkingDir already set")
+	ErrEnvSet = errors.New("dexec: Config.Env already set")
+	ErrDirSet = errors.New("dexec: Config.WorkingDir already set")
 )
 
 type Execution interface {
@@ -63,10 +63,10 @@ func (c *createContainer) Create(d Docker, cmd []string) error {
 	c.cmd = cmd
 
 	if len(c.opt.Config.Cmd) > 0 {
-		return errors.New("dexec: createContainer.Config.Cmd already set")
+		return errors.New("dexec: Config.Cmd already set")
 	}
 	if len(c.opt.Config.Entrypoint) > 0 {
-		return errors.New("dexec: createContainer.Config.Entrypoint already set")
+		return errors.New("dexec: Config.Entrypoint already set")
 	}
 
 	c.opt.Config.AttachStdin = true
