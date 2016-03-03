@@ -8,6 +8,11 @@ import (
 	"github.com/fsouza/go-dockerclient"
 )
 
+var (
+	ErrEnvSet = errors.New("dexec: createContainer.Config.Env already set")
+	ErrDirSet = errors.New("dexec: createContainer.Config.WorkingDir already set")
+)
+
 type Execution interface {
 	Create(d Docker, cmd []string) error
 	Run(d Docker, stdin io.Reader, stdout, stderr io.Writer) error
@@ -40,7 +45,7 @@ func (c *createContainer) setEnv(env []string) error {
 
 	// TODO test if user can provide empty env explicitly just fine.
 	if len(c.opt.Config.Env) > 0 {
-		return errors.New("dexec: createContainer.Config.Env already set")
+		return ErrEnvSet
 	}
 	c.opt.Config.Env = env
 	return nil
@@ -48,7 +53,7 @@ func (c *createContainer) setEnv(env []string) error {
 
 func (c *createContainer) setDir(dir string) error {
 	if c.opt.Config.WorkingDir != "" {
-		return errors.New("dexec: createContainer.Config.WorkingDir already set")
+		return ErrDirSet
 	}
 	c.opt.Config.WorkingDir = dir
 	return nil
@@ -96,6 +101,7 @@ func (c *createContainer) Run(d Docker, stdin io.Reader, stdout, stderr io.Write
 		OutputStream: stdout,
 		ErrorStream:  stderr,
 		Stream:       true,
+		Logs:         true, // include produced output so far
 	}
 	cw, err := d.Client.AttachToContainerNonBlocking(opts)
 	if err != nil {

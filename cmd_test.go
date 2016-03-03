@@ -1,6 +1,7 @@
 package dexec_test
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -18,6 +19,8 @@ var _ = Suite(&CmdTestSuite{})
 
 // container prefix used in testing
 const testPrefix = "dexec_test_"
+
+func testContainer() string { return fmt.Sprintf("%s%d", testPrefix, rand.Int63()) }
 
 type CmdTestSuite struct {
 	d dexec.Docker
@@ -53,12 +56,16 @@ func cleanupContainers(c *C, cl dexec.Docker) {
 	}
 }
 
-func baseContainer(c *C) dexec.Execution {
-	e, err := dexec.ByCreatingContainer(docker.CreateContainerOptions{
-		Name: fmt.Sprintf("%s%d", testPrefix, rand.Int63()),
+func baseOpts() docker.CreateContainerOptions {
+	return docker.CreateContainerOptions{
+		Name: testContainer(),
 		Config: &docker.Config{
 			Image: "busybox",
-		}})
+		}}
+}
+
+func baseContainer(c *C) dexec.Execution {
+	e, err := dexec.ByCreatingContainer(baseOpts())
 	c.Assert(err, IsNil)
 	return e
 }
@@ -82,11 +89,66 @@ func (s *CmdTestSuite) TestJustStart(c *C) {
 	c.Assert(err, IsNil)
 }
 
+func (s *CmdTestSuite) TestConfigNotSet(c *C) {
+	opts := baseOpts()
+	opts.Config = nil
+	_, err := dexec.ByCreatingContainer(opts)
+	c.Assert(err, NotNil)
+}
+
 func (s *CmdTestSuite) TestDoubleStart(c *C) {
-	cmd := s.d.Command(baseContainer(c), "echo", "arg1", "arg2")
+	cmd := s.d.Command(baseContainer(c), "echo")
 
 	_ = cmd.Start()
 	err := cmd.Start()
 	c.Assert(err, NotNil)
 	c.Assert(err.Error(), Equals, "dexec: already started")
+}
+
+func (s *CmdTestSuite) TestDirAlreadySet(c *C) {
+	opts := baseOpts()
+	opts.Config.WorkingDir = "/tmp"
+	e, err := dexec.ByCreatingContainer(opts)
+	c.Assert(err, IsNil)
+
+	cmd := s.d.Command(e, "echo")
+	cmd.Dir = "/"
+	err = cmd.Start()
+	c.Assert(err, Equals, dexec.ErrDirSet)
+}
+
+func (s *CmdTestSuite) TestDefaultHandles(c *C) {
+	cmd := s.d.Command(baseContainer(c), "echo")
+	err := cmd.Start()
+	c.Assert(err, IsNil)
+	c.Assert(cmd.Stdin, NotNil)
+	c.Assert(cmd.Stdout, NotNil)
+	c.Assert(cmd.Stderr, NotNil)
+}
+
+func (s *CmdTestSuite) TestHandlesPreserved(c *C) {
+	stdin := strings.NewReader("foo")
+	var b bytes.Buffer
+	stdout, stderr := &b, &b
+
+	cmd := s.d.Command(baseContainer(c), "echo", "arg1", "arg2")
+	cmd.Stdin = stdin
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+
+	c.Assert(cmd.Start(), IsNil)
+	c.Assert(cmd.Stdin, Equals, stdin)
+	c.Assert(cmd.Stdout, Equals, stdout)
+	c.Assert(cmd.Stderr, Equals, stderr)
+}
+
+func (s *CmdTestSuite) TestRunBasicCommand(c *C) {
+	cmd := s.d.Command(baseContainer(c), "echo", "arg1", "arg2")
+	var b bytes.Buffer
+	cmd.Stdout = &b
+	cmd.Stderr = &b
+
+	err := cmd.Run()
+	c.Assert(err, IsNil)
+	c.Assert(string(b.Bytes()), Equals, "arg1 arg2\n")
 }
