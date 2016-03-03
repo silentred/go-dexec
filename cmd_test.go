@@ -30,6 +30,7 @@ func (s *CmdTestSuite) SetUpSuite(c *C) {
 	cl, err := docker.NewClient("unix:///var/run/docker.sock")
 	c.Assert(err, IsNil)
 	s.d = dexec.Docker{cl}
+	cleanupContainers(c, s.d)
 }
 
 func (s *CmdTestSuite) TearDownSuite(c *C) {
@@ -142,7 +143,7 @@ func (s *CmdTestSuite) TestHandlesPreserved(c *C) {
 	c.Assert(cmd.Stderr, Equals, stderr)
 }
 
-func (s *CmdTestSuite) TestRunBasicCommand(c *C) {
+func (s *CmdTestSuite) TestRunBasicCommandReadOutput(c *C) {
 	cmd := s.d.Command(baseContainer(c), "echo", "arg1", "arg2")
 	var b bytes.Buffer
 	cmd.Stdout = &b
@@ -151,4 +152,19 @@ func (s *CmdTestSuite) TestRunBasicCommand(c *C) {
 	err := cmd.Run()
 	c.Assert(err, IsNil)
 	c.Assert(string(b.Bytes()), Equals, "arg1 arg2\n")
+}
+
+func (s *CmdTestSuite) TestRunBasicCommandWithStdin(c *C) {
+	in := `lazy
+	fox
+jumped`
+
+	var b bytes.Buffer
+	cmd := s.d.Command(baseContainer(c), "cat")
+	cmd.Stdin = strings.NewReader(in)
+	cmd.Stdout, cmd.Stderr = &b, &b
+
+	err := cmd.Run()
+	c.Assert(err, IsNil)
+	c.Assert(string(b.Bytes()), Equals, in)
 }
