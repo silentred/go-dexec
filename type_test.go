@@ -33,8 +33,3 @@ func TestDexecCommandMatchesInterface(_ *testing.T) {
 	c = v // compile error
 	_ = c
 }
-
-func TestCreateContainerMethodIsExecution(t *testing.T) {
-	var c dexec.Execution = &dexec.CreateContainer{}
-	_ = c
-}

@@ -17,50 +17,60 @@ type Execution interface {
 	setDir(dir string) error
 }
 
-// CreateContainer is a context to launch containers with specified
+// createContainer is a context to launch containers with specified
 // options for execution.
-type CreateContainer struct {
-	docker.CreateContainerOptions
-
+type createContainer struct {
+	opt docker.CreateContainerOptions
 	cmd []string
 	id  string // created container id
 	cw  docker.CloseWaiter
 }
 
-func (c *CreateContainer) setEnv(env []string) error {
+func ByCreatingContainer(opts docker.CreateContainerOptions) (Execution, error) {
+	if opts.Config == nil {
+		return nil, errors.New("dexec: Config is nil")
+	}
+	return &createContainer{opt: opts}, nil
+}
+
+func (c *createContainer) setEnv(env []string) error {
+	if c.opt.Config == nil {
+		return errors.New("dexec: Config not set")
+	}
+
 	// TODO test if user can provide empty env explicitly just fine.
-	if len(c.Config.Env) > 0 {
-		return errors.New("dexec: CreateContainer.Config.Env already set")
+	if len(c.opt.Config.Env) > 0 {
+		return errors.New("dexec: createContainer.Config.Env already set")
 	}
-	c.Config.Env = env
+	c.opt.Config.Env = env
 	return nil
 }
 
-func (c *CreateContainer) setDir(dir string) error {
-	if c.Config.WorkingDir != "" {
-		return errors.New("dexec: CreateContainer.Config.WorkingDir already set")
+func (c *createContainer) setDir(dir string) error {
+	if c.opt.Config.WorkingDir != "" {
+		return errors.New("dexec: createContainer.Config.WorkingDir already set")
 	}
-	c.Config.WorkingDir = dir
+	c.opt.Config.WorkingDir = dir
 	return nil
 }
 
-func (c *CreateContainer) Create(d Docker, cmd []string) error {
+func (c *createContainer) Create(d Docker, cmd []string) error {
 	c.cmd = cmd
 
-	if len(c.Config.Cmd) > 0 {
-		return errors.New("dexec: CreateContainer.Config.Cmd already set")
+	if len(c.opt.Config.Cmd) > 0 {
+		return errors.New("dexec: createContainer.Config.Cmd already set")
 	}
-	if len(c.Config.Entrypoint) > 0 {
-		return errors.New("dexec: CreateContainer.Config.Entrypoint already set")
+	if len(c.opt.Config.Entrypoint) > 0 {
+		return errors.New("dexec: createContainer.Config.Entrypoint already set")
 	}
 
-	c.Config.AttachStdin = true
-	c.Config.AttachStdout = true
-	c.Config.AttachStderr = true
-	c.Config.Cmd = nil        // clear cmd
-	c.Config.Entrypoint = cmd // set new entrypoint
+	c.opt.Config.AttachStdin = true
+	c.opt.Config.AttachStdout = true
+	c.opt.Config.AttachStderr = true
+	c.opt.Config.Cmd = nil        // clear cmd
+	c.opt.Config.Entrypoint = cmd // set new entrypoint
 
-	container, err := d.Client.CreateContainer(c.CreateContainerOptions)
+	container, err := d.Client.CreateContainer(c.opt)
 	if err != nil {
 		return fmt.Errorf("dexec: failed to create container: %v", err)
 	}
@@ -69,7 +79,7 @@ func (c *CreateContainer) Create(d Docker, cmd []string) error {
 	return nil
 }
 
-func (c *CreateContainer) Run(d Docker, stdin io.Reader, stdout, stderr io.Writer) error {
+func (c *createContainer) Run(d Docker, stdin io.Reader, stdout, stderr io.Writer) error {
 	if c.id == "" {
 		return errors.New("dexec: container is not created")
 	}
@@ -95,7 +105,7 @@ func (c *CreateContainer) Run(d Docker, stdin io.Reader, stdout, stderr io.Write
 	return nil
 }
 
-func (c *CreateContainer) Wait() error {
+func (c *createContainer) Wait() error {
 	if c.cw == nil {
 		return errors.New("dexec: container is not attached")
 	}
