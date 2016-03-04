@@ -8,11 +8,6 @@ import (
 	"github.com/fsouza/go-dockerclient"
 )
 
-var (
-	ErrAlreadyStarted = errors.New("dexec: already started")
-	ErrNotStarted     = errors.New("dexec: not started")
-)
-
 type Docker struct {
 	*docker.Client
 }
@@ -75,7 +70,7 @@ func (c *Cmd) Start() error {
 	}
 
 	if c.started {
-		return ErrAlreadyStarted
+		return errors.New("dexec: already started")
 	}
 	c.started = true
 
@@ -101,9 +96,9 @@ func (c *Cmd) Start() error {
 
 func (c *Cmd) Wait() error {
 	if !c.started {
-		return ErrNotStarted
+		return errors.New("dexec: not started")
 	}
-	if err := c.Method.Wait(); err != nil {
+	if err := c.Method.Wait(c.docker); err != nil {
 		return err
 	}
 	return nil

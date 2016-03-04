@@ -8,15 +8,10 @@ import (
 	"github.com/fsouza/go-dockerclient"
 )
 
-var (
-	ErrEnvSet = errors.New("dexec: Config.Env already set")
-	ErrDirSet = errors.New("dexec: Config.WorkingDir already set")
-)
-
 type Execution interface {
 	Create(d Docker, cmd []string) error
 	Run(d Docker, stdin io.Reader, stdout, stderr io.Writer) error
-	Wait() error
+	Wait(d Docker) error
 
 	setEnv(env []string) error
 	setDir(dir string) error
@@ -45,7 +40,7 @@ func (c *createContainer) setEnv(env []string) error {
 
 	// TODO test if user can provide empty env explicitly just fine.
 	if len(c.opt.Config.Env) > 0 {
-		return ErrEnvSet
+		return errors.New("dexec: Config.Env already set")
 	}
 	c.opt.Config.Env = env
 	return nil
@@ -53,7 +48,7 @@ func (c *createContainer) setEnv(env []string) error {
 
 func (c *createContainer) setDir(dir string) error {
 	if c.opt.Config.WorkingDir != "" {
-		return ErrDirSet
+		return errors.New("dexec: Config.WorkingDir already set")
 	}
 	c.opt.Config.WorkingDir = dir
 	return nil
@@ -91,7 +86,7 @@ func (c *createContainer) Run(d Docker, stdin io.Reader, stdout, stderr io.Write
 		return errors.New("dexec: container is not created")
 	}
 	if err := d.Client.StartContainer(c.id, nil); err != nil {
-		return fmt.Errorf("dexec: failed to start container %q: %v", c.id, err)
+		return fmt.Errorf("dexec: failed to start container:  %v", err)
 	}
 
 	opts := docker.AttachToContainerOptions{
@@ -107,18 +102,25 @@ func (c *createContainer) Run(d Docker, stdin io.Reader, stdout, stderr io.Write
 	}
 	cw, err := d.Client.AttachToContainerNonBlocking(opts)
 	if err != nil {
-		return fmt.Errorf("dexec: failed to attach container %q: %v", err)
+		return fmt.Errorf("dexec: failed to attach container: %v", err)
 	}
 	c.cw = cw
 	return nil
 }
 
-func (c *createContainer) Wait() error {
+func (c *createContainer) Wait(d Docker) error {
 	if c.cw == nil {
 		return errors.New("dexec: container is not attached")
 	}
 	if err := c.cw.Wait(); err != nil {
 		return fmt.Errorf("dexec: attach error: %v", err)
+	}
+	ec, err := d.WaitContainer(c.id)
+	if err != nil {
+		return fmt.Errorf("dexec: cannot wait for container: %v", err)
+	}
+	if ec != 0 {
+		return fmt.Errorf("dexec: exit status: %d", ec)
 	}
 	return nil
 }

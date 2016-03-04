@@ -103,7 +103,7 @@ func (s *CmdTestSuite) TestDoubleStart(c *C) {
 	_ = cmd.Start()
 	err := cmd.Start()
 	c.Assert(err, NotNil)
-	c.Assert(err, Equals, dexec.ErrAlreadyStarted)
+	c.Assert(err, ErrorMatches, "dexec: already started")
 }
 
 func (s *CmdTestSuite) TestWaitBeforestart(c *C) {
@@ -111,7 +111,7 @@ func (s *CmdTestSuite) TestWaitBeforestart(c *C) {
 
 	err := cmd.Wait()
 	c.Assert(err, NotNil)
-	c.Assert(err, Equals, dexec.ErrNotStarted)
+	c.Assert(err, ErrorMatches, "dexec: not started")
 }
 
 func (s *CmdTestSuite) TestDirAlreadySet(c *C) {
@@ -120,10 +120,22 @@ func (s *CmdTestSuite) TestDirAlreadySet(c *C) {
 	e, err := dexec.ByCreatingContainer(opts)
 	c.Assert(err, IsNil)
 
-	cmd := s.d.Command(e, "echo")
+	cmd := s.d.Command(e, "pwd")
 	cmd.Dir = "/"
 	err = cmd.Start()
-	c.Assert(err, Equals, dexec.ErrDirSet)
+	c.Assert(err, ErrorMatches, "dexec: Config.WorkingDir already set")
+}
+
+func (s *CmdTestSuite) TestEnvAlreadySet(c *C) {
+	opts := baseOpts()
+	opts.Config.Env = []string{"A=B"}
+	e, err := dexec.ByCreatingContainer(opts)
+	c.Assert(err, IsNil)
+
+	cmd := s.d.Command(e, "env")
+	cmd.Env = []string{"C=D"}
+	err = cmd.Start()
+	c.Assert(err, ErrorMatches, "dexec: Config.Env already set")
 }
 
 func (s *CmdTestSuite) TestEntrypointAlreadySet(c *C) {
@@ -173,7 +185,27 @@ func (s *CmdTestSuite) TestHandlesPreserved(c *C) {
 	c.Assert(cmd.Stderr, Equals, stderr)
 }
 
-func (s *CmdTestSuite) TestRunBasicCommandReadOutput(c *C) {
+func (s *CmdTestSuite) TestNonExisitingCommand(c *C) {
+	cmd := s.d.Command(baseContainer(c), "no-such-program")
+	err := cmd.Run()
+	c.Assert(err, NotNil)
+	c.Assert(strings.HasPrefix(err.Error(), `dexec: failed to start container:`), Equals, true)
+}
+
+func (s *CmdTestSuite) TestFailedCommandReturnsError(c *C) {
+	cmd := s.d.Command(baseContainer(c), "false")
+	err := cmd.Run()
+	c.Assert(err, NotNil)
+}
+
+func (s *CmdTestSuite) TestNonZeroExitCodeReturnedInError(c *C) {
+	cmd := s.d.Command(baseContainer(c), "sh", "-c", "exit 3")
+	err := cmd.Run()
+	c.Assert(err, NotNil)
+	c.Assert(err, ErrorMatches, "dexec: exit status: 3")
+}
+
+func (s *CmdTestSuite) TestRunBasicCommandReadStdout(c *C) {
 	cmd := s.d.Command(baseContainer(c), "echo", "arg1", "arg2")
 	var b bytes.Buffer
 	cmd.Stdout = &b
