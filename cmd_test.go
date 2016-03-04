@@ -2,6 +2,7 @@ package dexec_test
 
 import (
 	"bytes"
+	"crypto/md5"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -33,11 +34,7 @@ func (s *CmdTestSuite) SetUpSuite(c *C) {
 	cleanupContainers(c, s.d)
 }
 
-func (s *CmdTestSuite) TearDownSuite(c *C) {
-	cleanupContainers(c, s.d)
-}
-
-func (s *CmdTestSuite) TearDownTest(c *C) {
+func (s *CmdTestSuite) SetUpTest(c *C) {
 	cleanupContainers(c, s.d)
 }
 
@@ -328,4 +325,22 @@ func (s *CmdTestSuite) TestOutputExitErrorStderrCollected(c *C) {
 	ee := err.(*dexec.ExitError)
 	c.Assert(ee.Stderr, NotNil)
 	c.Assert(string(ee.Stderr), Equals, "err\n")
+}
+
+func (s *CmdTestSuite) TestLargeStdin(c *C) {
+	b := make([]byte, 100*1024*1024)
+	rnd := rand.New(rand.NewSource(1))
+	rnd.Read(b)
+
+	// compute hash in memory
+	h := md5.New()
+	h.Write(b)
+	sum := fmt.Sprintf("%x", h.Sum(nil))
+
+	// compute hash in container
+	cmd := s.d.Command(baseContainer(c), "md5sum")
+	cmd.Stdin = bytes.NewReader(b)
+	out, err := cmd.Output()
+	c.Assert(err, IsNil, Commentf("%v", err))
+	c.Assert(string(out), Equals, sum+"  -\n") // md5sum has some idiot suffix
 }

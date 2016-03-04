@@ -107,12 +107,12 @@ func (c *createContainer) Wait(d Docker) (exitCode int, err error) {
 	if c.cw == nil {
 		return -1, errors.New("dexec: container is not attached")
 	}
-	if err = c.cw.Wait(); err != nil {
-		return -1, fmt.Errorf("dexec: attach error: %v", err)
-	}
 	ec, err := d.WaitContainer(c.id)
 	if err != nil {
 		return -1, fmt.Errorf("dexec: cannot wait for container: %v", err)
+	}
+	if err = c.cw.Wait(); err != nil {
+		return -1, fmt.Errorf("dexec: attach error: %v", err)
 	}
 	return ec, nil
 }
