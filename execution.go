@@ -13,8 +13,8 @@ type Execution interface {
 	Run(d Docker, stdin io.Reader, stdout, stderr io.Writer) error
 	Wait(d Docker) (int, error)
 
-	setEnv(env []string) error
-	setDir(dir string) error
+	SetEnv(env []string) error
+	SetDir(dir string) error
 }
 
 type createContainer struct {
@@ -33,12 +33,7 @@ func ByCreatingContainer(opts docker.CreateContainerOptions) (Execution, error) 
 	return &createContainer{opt: opts}, nil
 }
 
-func (c *createContainer) setEnv(env []string) error {
-	if c.opt.Config == nil {
-		return errors.New("dexec: Config not set")
-	}
-
-	// TODO test if user can provide empty env explicitly just fine.
+func (c *createContainer) SetEnv(env []string) error {
 	if len(c.opt.Config.Env) > 0 {
 		return errors.New("dexec: Config.Env already set")
 	}
@@ -46,7 +41,7 @@ func (c *createContainer) setEnv(env []string) error {
 	return nil
 }
 
-func (c *createContainer) setDir(dir string) error {
+func (c *createContainer) SetDir(dir string) error {
 	if c.opt.Config.WorkingDir != "" {
 		return errors.New("dexec: Config.WorkingDir already set")
 	}

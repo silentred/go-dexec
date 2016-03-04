@@ -80,9 +80,6 @@ func (s *CmdTestSuite) TestNewCommand(c *C) {
 	c.Assert(cmd.Args, DeepEquals, []string{"arg1", "arg2"})
 }
 
-// TODO test errors if dir is set
-// TODO test errors if env is set
-
 func (s *CmdTestSuite) TestJustStart(c *C) {
 	cmd := s.d.Command(baseContainer(c), "echo", "arg1", "arg2")
 
@@ -291,7 +288,8 @@ func (s *CmdTestSuite) TestCombinedOutputStderrAlreadySet(c *C) {
 }
 
 func (s *CmdTestSuite) TestCombinedOutput(c *C) {
-	cmd := s.d.Command(baseContainer(c), "sh", "-c", "echo out; >&2 echo err;")
+	cmd := s.d.Command(baseContainer(c), "sh", "-c", "echo out; sleep .5; >&2 echo err;")
+	// if we don't sleep sometimes we get "err\nout\n".
 	b, err := cmd.CombinedOutput()
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "out\nerr\n")
@@ -329,4 +327,5 @@ func (s *CmdTestSuite) TestOutputExitErrorStderrCollected(c *C) {
 	c.Assert(err, FitsTypeOf, &dexec.ExitError{})
 	ee := err.(*dexec.ExitError)
 	c.Assert(ee.Stderr, NotNil)
+	c.Assert(string(ee.Stderr), Equals, "err\n")
 }

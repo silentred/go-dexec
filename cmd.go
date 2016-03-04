@@ -63,12 +63,12 @@ type Cmd struct {
 // Start starts the specified command but does not wait for it to complete.
 func (c *Cmd) Start() error {
 	if c.Dir != "" {
-		if err := c.Method.setDir(c.Dir); err != nil {
+		if err := c.Method.SetDir(c.Dir); err != nil {
 			return err
 		}
 	}
 	if c.Env != nil {
-		if err := c.Method.setEnv(c.Env); err != nil {
+		if err := c.Method.SetEnv(c.Env); err != nil {
 			return err
 		}
 	}
@@ -133,10 +133,12 @@ func (c *Cmd) Run() error {
 	return c.Wait()
 }
 
-func (c *Cmd) StderrPipe() (io.ReadCloser, error) { return nil, nil }
-func (c *Cmd) StdinPipe() (io.WriteCloser, error) { return nil, nil }
-func (c *Cmd) StdoutPipe() (io.ReadCloser, error) { return nil, nil }
-
+// CombinedOutput runs the command and returns its combined standard output and
+// standard error.
+//
+// Docker API does not have strong guarantees over ordering of messages. For instance:
+//     >&1 echo out; >&2 echo err
+// may result in "out\nerr\n" as well as "err\nout\n" from this method.
 func (c *Cmd) CombinedOutput() ([]byte, error) {
 	if c.Stdout != nil {
 		return nil, errors.New("dexec: Stdout already set")
@@ -175,3 +177,7 @@ func (c *Cmd) Output() ([]byte, error) {
 	}
 	return stdout.Bytes(), err
 }
+
+func (c *Cmd) StderrPipe() (io.ReadCloser, error) { return nil, nil }
+func (c *Cmd) StdinPipe() (io.WriteCloser, error) { return nil, nil }
+func (c *Cmd) StdoutPipe() (io.ReadCloser, error) { return nil, nil }
