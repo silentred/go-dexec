@@ -95,6 +95,7 @@ func (s *CmdTestSuite) TestConfigNotSet(c *C) {
 	opts.Config = nil
 	_, err := dexec.ByCreatingContainer(opts)
 	c.Assert(err, NotNil)
+	c.Assert(err, ErrorMatches, "dexec: Config is nil")
 }
 
 func (s *CmdTestSuite) TestDoubleStart(c *C) {
@@ -192,17 +193,23 @@ func (s *CmdTestSuite) TestNonExisitingCommand(c *C) {
 	c.Assert(strings.HasPrefix(err.Error(), `dexec: failed to start container:`), Equals, true)
 }
 
-func (s *CmdTestSuite) TestFailedCommandReturnsError(c *C) {
+func (s *CmdTestSuite) TestFailedCommandReturnsExitError(c *C) {
 	cmd := s.d.Command(baseContainer(c), "false")
 	err := cmd.Run()
 	c.Assert(err, NotNil)
+	c.Assert(err, FitsTypeOf, &dexec.ExitError{})
 }
 
 func (s *CmdTestSuite) TestNonZeroExitCodeReturnedInError(c *C) {
-	cmd := s.d.Command(baseContainer(c), "sh", "-c", "exit 3")
+	cmd := s.d.Command(baseContainer(c), "sh", "-c", ">&2 echo error; exit 3")
 	err := cmd.Run()
 	c.Assert(err, NotNil)
+	c.Assert(err, FitsTypeOf, &dexec.ExitError{})
 	c.Assert(err, ErrorMatches, "dexec: exit status: 3")
+
+	ecErr := err.(*dexec.ExitError)
+	c.Assert(ecErr.ExitCode, Equals, 3)
+	c.Assert(ecErr.Stderr, IsNil) // Run() shouldn't set ExitError.Stderr
 }
 
 func (s *CmdTestSuite) TestRunBasicCommandReadStdout(c *C) {
@@ -252,6 +259,7 @@ func (s *CmdTestSuite) TestRunWithEnv(c *C) {
 	c.Assert(err, IsNil)
 
 	out := string(b.Bytes())
+	c.Logf("Output=%q", out)
 	c.Assert(strings.Contains(out, "A=B\n"), Equals, true)
 	c.Assert(strings.Contains(out, "C=D\n"), Equals, true)
 }
@@ -266,9 +274,59 @@ func (s *CmdTestSuite) TestRunStdoutStderrDontMix(c *C) {
 	c.Assert(string(errS.Bytes()), Equals, "err\n")
 }
 
+func (s *CmdTestSuite) TestCombinedOutputStdoutAlreadySet(c *C) {
+	var b bytes.Buffer
+	cmd := s.d.Command(baseContainer(c), "env")
+	cmd.Stdout = &b
+	_, err := cmd.CombinedOutput()
+	c.Assert(err, ErrorMatches, "dexec: Stdout already set")
+}
+
+func (s *CmdTestSuite) TestCombinedOutputStderrAlreadySet(c *C) {
+	var b bytes.Buffer
+	cmd := s.d.Command(baseContainer(c), "env")
+	cmd.Stderr = &b
+	_, err := cmd.CombinedOutput()
+	c.Assert(err, ErrorMatches, "dexec: Stderr already set")
+}
+
 func (s *CmdTestSuite) TestCombinedOutput(c *C) {
 	cmd := s.d.Command(baseContainer(c), "sh", "-c", "echo out; >&2 echo err;")
 	b, err := cmd.CombinedOutput()
 	c.Assert(err, IsNil)
 	c.Assert(string(b), Equals, "out\nerr\n")
+}
+
+func (s *CmdTestSuite) TestOutputStdoutAlreadySet(c *C) {
+	var b bytes.Buffer
+	cmd := s.d.Command(baseContainer(c), "env")
+	cmd.Stdout = &b
+	_, err := cmd.Output()
+	c.Assert(err, ErrorMatches, "dexec: Stdout already set")
+}
+
+func (s *CmdTestSuite) TestOutputSuccessfulCommand(c *C) {
+	cmd := s.d.Command(baseContainer(c), "sh", "-c", "echo out; >&2 echo err;")
+	b, err := cmd.Output()
+	c.Assert(err, IsNil)
+	c.Assert(string(b), Equals, "out\n")
+}
+
+func (s *CmdTestSuite) TestOutputExitErrorStderrNotCollected(c *C) {
+	var b bytes.Buffer
+	cmd := s.d.Command(baseContainer(c), "sh", "-c", "echo out; >&2 echo err; exit 1")
+	cmd.Stderr = &b // set Stderr so that ExitError doesn't collect
+	_, err := cmd.Output()
+	c.Assert(err, FitsTypeOf, &dexec.ExitError{})
+	ee := err.(*dexec.ExitError)
+	c.Assert(ee.Stderr, IsNil)
+}
+
+func (s *CmdTestSuite) TestOutputExitErrorStderrCollected(c *C) {
+	cmd := s.d.Command(baseContainer(c), "sh", "-c", "echo out; >&2 echo err; exit 1")
+	b, err := cmd.Output()
+	c.Assert(string(b), Equals, "out\n")
+	c.Assert(err, FitsTypeOf, &dexec.ExitError{})
+	ee := err.(*dexec.ExitError)
+	c.Assert(ee.Stderr, NotNil)
 }

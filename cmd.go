@@ -8,10 +8,15 @@ import (
 	"github.com/fsouza/go-dockerclient"
 )
 
+// Docker contains connection to Docker API.
 type Docker struct {
 	*docker.Client
 }
 
+// Command returns the Cmd struct to execute the named program with given
+// arguments using specified execution method.
+//
+// A new method instance should be used for each new Cmd.
 func (d Docker) Command(method Execution, name string, arg ...string) *Cmd {
 	return &Cmd{Method: method, Path: name, Args: arg, docker: d}
 }
@@ -48,8 +53,6 @@ type Cmd struct {
 	//
 	// Run will not close the underlying handles if they are *os.File differently
 	// than os/exec.
-	//
-	// TODO test concurrency guarantees around calls to Write() if Stdout==Stderr
 	Stdout io.Writer
 	Stderr io.Writer
 
@@ -57,6 +60,7 @@ type Cmd struct {
 	started bool
 }
 
+// Start starts the specified command but does not wait for it to complete.
 func (c *Cmd) Start() error {
 	if c.Dir != "" {
 		if err := c.Method.setDir(c.Dir); err != nil {
@@ -94,16 +98,34 @@ func (c *Cmd) Start() error {
 	return nil
 }
 
+// Wait waits for the command to exit. It must have been started by Start.
+//
+// If the container exits with a non-zero exit code, the error is of type
+// *ExitError. Other error types may be returned for I/O problems and such.
+//
+// Different than os/exec.Wait, this method will not release any resources
+// associated with Cmd (such as file handles).
 func (c *Cmd) Wait() error {
 	if !c.started {
 		return errors.New("dexec: not started")
 	}
-	if err := c.Method.Wait(c.docker); err != nil {
+	ec, err := c.Method.Wait(c.docker)
+	if err != nil {
 		return err
+	}
+	if ec != 0 {
+		return &ExitError{ExitCode: ec}
 	}
 	return nil
 }
 
+// Run starts the specified command and waits for it to complete.
+//
+// If the command runs successfully and copying streams are done as expected,
+// the error is nil.
+//
+// If the container exits with a non-zero exit code, the error is of type
+// *ExitError. Other error types may be returned for I/O problems and such.
 func (c *Cmd) Run() error {
 	if err := c.Start(); err != nil {
 		return err
@@ -128,4 +150,28 @@ func (c *Cmd) CombinedOutput() ([]byte, error) {
 	return b.Bytes(), err
 }
 
-func (c *Cmd) Output() ([]byte, error) { return nil, nil }
+// Output runs the command and returns its standard output.
+//
+// If the container exits with a non-zero exit code, the error is of type
+// *ExitError. Other error types may be returned for I/O problems and such.
+//
+// If c.Stderr was nil, Output populates ExitError.Stderr.
+func (c *Cmd) Output() ([]byte, error) {
+	if c.Stdout != nil {
+		return nil, errors.New("dexec: Stdout already set")
+	}
+	var stdout, stderr bytes.Buffer
+	c.Stdout = &stdout
+
+	captureErr := c.Stderr == nil
+	if captureErr {
+		c.Stderr = &stderr
+	}
+	err := c.Run()
+	if err != nil && captureErr {
+		if ee, ok := err.(*ExitError); ok {
+			ee.Stderr = stderr.Bytes()
+		}
+	}
+	return stdout.Bytes(), err
+}

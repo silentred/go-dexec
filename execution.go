@@ -11,14 +11,12 @@ import (
 type Execution interface {
 	Create(d Docker, cmd []string) error
 	Run(d Docker, stdin io.Reader, stdout, stderr io.Writer) error
-	Wait(d Docker) error
+	Wait(d Docker) (int, error)
 
 	setEnv(env []string) error
 	setDir(dir string) error
 }
 
-// createContainer is a context to launch containers with specified
-// options for execution.
 type createContainer struct {
 	opt docker.CreateContainerOptions
 	cmd []string
@@ -26,6 +24,8 @@ type createContainer struct {
 	cw  docker.CloseWaiter
 }
 
+// ByCreatingContainer is the execution strategy where a new container with specified
+// options is created to execute the command.
 func ByCreatingContainer(opts docker.CreateContainerOptions) (Execution, error) {
 	if opts.Config == nil {
 		return nil, errors.New("dexec: Config is nil")
@@ -108,19 +108,16 @@ func (c *createContainer) Run(d Docker, stdin io.Reader, stdout, stderr io.Write
 	return nil
 }
 
-func (c *createContainer) Wait(d Docker) error {
+func (c *createContainer) Wait(d Docker) (exitCode int, err error) {
 	if c.cw == nil {
-		return errors.New("dexec: container is not attached")
+		return -1, errors.New("dexec: container is not attached")
 	}
-	if err := c.cw.Wait(); err != nil {
-		return fmt.Errorf("dexec: attach error: %v", err)
+	if err = c.cw.Wait(); err != nil {
+		return -1, fmt.Errorf("dexec: attach error: %v", err)
 	}
 	ec, err := d.WaitContainer(c.id)
 	if err != nil {
-		return fmt.Errorf("dexec: cannot wait for container: %v", err)
+		return -1, fmt.Errorf("dexec: cannot wait for container: %v", err)
 	}
-	if ec != 0 {
-		return fmt.Errorf("dexec: exit status: %d", ec)
-	}
-	return nil
+	return ec, nil
 }
