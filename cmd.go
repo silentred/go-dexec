@@ -1,6 +1,7 @@
 package dexec
 
 import (
+	"bytes"
 	"errors"
 	"io"
 
@@ -53,7 +54,7 @@ type Cmd struct {
 	// Run will not close the underlying handles if they are *os.File differently
 	// than os/exec.
 	//
-	// TODO concurrency guarantees around calls to Write() if Stdout==Stderr
+	// TODO test concurrency guarantees around calls to Write() if Stdout==Stderr
 	Stdout io.Writer
 	Stderr io.Writer
 
@@ -118,5 +119,18 @@ func (c *Cmd) Run() error {
 func (c *Cmd) StderrPipe() (io.ReadCloser, error) { return nil, nil }
 func (c *Cmd) StdinPipe() (io.WriteCloser, error) { return nil, nil }
 func (c *Cmd) StdoutPipe() (io.ReadCloser, error) { return nil, nil }
-func (c *Cmd) CombinedOutput() ([]byte, error)    { return nil, nil }
-func (c *Cmd) Output() ([]byte, error)            { return nil, nil }
+
+func (c *Cmd) CombinedOutput() ([]byte, error) {
+	if c.Stdout != nil {
+		return nil, errors.New("dexec: Stdout already set")
+	}
+	if c.Stderr != nil {
+		return nil, errors.New("dexec: Stderr already set")
+	}
+	var b bytes.Buffer
+	c.Stdout, c.Stderr = &b, &b
+	err := c.Run()
+	return b.Bytes(), err
+}
+
+func (c *Cmd) Output() ([]byte, error) { return nil, nil }

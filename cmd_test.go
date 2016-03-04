@@ -223,3 +223,20 @@ func (s *CmdTestSuite) TestRunWithEnv(c *C) {
 	c.Assert(strings.Contains(out, "A=B\n"), Equals, true)
 	c.Assert(strings.Contains(out, "C=D\n"), Equals, true)
 }
+
+func (s *CmdTestSuite) TestRunStdoutStderrDontMix(c *C) {
+	cmd := s.d.Command(baseContainer(c), "sh", "-c", "echo out; >&2 echo err;")
+	var outS, errS bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &outS, &errS
+	c.Assert(cmd.Run(), IsNil)
+
+	c.Assert(string(outS.Bytes()), Equals, "out\n")
+	c.Assert(string(errS.Bytes()), Equals, "err\n")
+}
+
+func (s *CmdTestSuite) TestCombinedOutput(c *C) {
+	cmd := s.d.Command(baseContainer(c), "sh", "-c", "echo out; >&2 echo err;")
+	b, err := cmd.CombinedOutput()
+	c.Assert(err, IsNil)
+	c.Assert(string(b), Equals, "out\nerr\n")
+}
