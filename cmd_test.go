@@ -3,9 +3,13 @@ package dexec_test
 import (
 	"bytes"
 	"crypto/md5"
+	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"math/rand"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/ahmetalpbalkan/dexec"
@@ -343,4 +347,117 @@ func (s *CmdTestSuite) TestLargeStdin(c *C) {
 	out, err := cmd.Output()
 	c.Assert(err, IsNil, Commentf("%v", err))
 	c.Assert(string(out), Equals, sum+"  -\n") // md5sum has some idiot suffix
+}
+
+func (s *CmdTestSuite) TestStdinPipeAlreadySet(c *C) {
+	cmd := s.d.Command(baseContainer(c), "cat")
+	cmd.Stdin = bytes.NewReader([]byte{})
+	_, err := cmd.StdinPipe()
+	c.Assert(err, ErrorMatches, "dexec: Stdin already set")
+}
+
+func (s *CmdTestSuite) TestStdinPipe(c *C) {
+	cmd := s.d.Command(baseContainer(c), "cat")
+	w, err := cmd.StdinPipe()
+	c.Assert(err, IsNil)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		b, err := cmd.CombinedOutput()
+		c.Assert(err, IsNil)
+		c.Assert(string(b), Equals, "Hello, world!")
+	}()
+	go func() {
+		defer wg.Done()
+		defer w.Close()
+		sr := strings.NewReader("Hello, world!")
+		_, err = io.Copy(w, sr)
+		c.Assert(err, IsNil)
+	}()
+	wg.Wait()
+}
+
+func (s *CmdTestSuite) TestStdoutPipeAlreadySet(c *C) {
+	var b bytes.Buffer
+	cmd := s.d.Command(baseContainer(c), "echo", "foo")
+	cmd.Stdout = &b
+	_, err := cmd.StdoutPipe()
+	c.Assert(err, ErrorMatches, "dexec: Stdout already set")
+}
+
+func (s *CmdTestSuite) TestStdoutPipe(c *C) {
+	cmd := s.d.Command(baseContainer(c), "sh", "-c", "for i in `seq 0 10`; do sleep .2; echo $i; >&2 echo err; done")
+	r, err := cmd.StdoutPipe()
+	c.Assert(err, IsNil)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		b, err := ioutil.ReadAll(r)
+		c.Assert(err, IsNil)
+		c.Assert(string(b), Equals, "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n")
+	}()
+
+	go func() {
+		defer wg.Done()
+		c.Assert(cmd.Run(), IsNil)
+	}()
+	wg.Wait()
+}
+
+func (s *CmdTestSuite) TestStdoutPipeJSONDecoding(c *C) {
+	// TODO this test does not use goroutines and follows os/exec pattern
+	// however 10% of the time it hangs. there's some timing issue somewhere.
+	cmd := s.d.Command(baseContainer(c), "echo", `{"Name":"Bob", "Age": 32}`)
+	r, err := cmd.StdoutPipe()
+	c.Assert(err, IsNil)
+	c.Assert(cmd.Start(), IsNil)
+	var person struct {
+		Name string
+		Age  int
+	}
+	c.Assert(json.NewDecoder(r).Decode(&person), IsNil)
+	c.Assert(cmd.Wait(), IsNil)
+	c.Assert(person.Name, Equals, "Bob")
+	c.Assert(person.Age, Equals, 32)
+}
+
+func (s *CmdTestSuite) TestStderrPipeAlreadySet(c *C) {
+	var b bytes.Buffer
+	cmd := s.d.Command(baseContainer(c), "echo", "foo")
+	cmd.Stderr = &b
+	_, err := cmd.StderrPipe()
+	c.Assert(err, ErrorMatches, "dexec: Stderr already set")
+}
+
+func (s *CmdTestSuite) TestStderrPipe(c *C) {
+	cmd := s.d.Command(baseContainer(c), "sh", "-c", "for i in `seq 0 9`; do sleep .2; >&2 echo $i; echo -$i; done")
+	r, err := cmd.StderrPipe()
+	c.Assert(err, IsNil)
+	out, err := cmd.StdoutPipe()
+	c.Assert(err, IsNil)
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		b, err := ioutil.ReadAll(r)
+		c.Assert(err, IsNil)
+		c.Assert(string(b), Equals, "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n")
+	}()
+	go func() {
+		defer wg.Done()
+		b, err := ioutil.ReadAll(out)
+		c.Assert(err, IsNil)
+		c.Assert(string(b), Equals, "-0\n-1\n-2\n-3\n-4\n-5\n-6\n-7\n-8\n-9\n")
+	}()
+
+	go func() {
+		defer wg.Done()
+		c.Assert(cmd.Run(), IsNil)
+	}()
+	wg.Wait()
 }

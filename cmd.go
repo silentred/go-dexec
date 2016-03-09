@@ -56,8 +56,9 @@ type Cmd struct {
 	Stdout io.Writer
 	Stderr io.Writer
 
-	docker  Docker
-	started bool
+	docker         Docker
+	started        bool
+	closeAfterWait []io.Closer
 }
 
 // Start starts the specified command but does not wait for it to complete.
@@ -106,6 +107,7 @@ func (c *Cmd) Start() error {
 // Different than os/exec.Wait, this method will not release any resources
 // associated with Cmd (such as file handles).
 func (c *Cmd) Wait() error {
+	defer closeFds(c.closeAfterWait)
 	if !c.started {
 		return errors.New("dexec: not started")
 	}
@@ -178,6 +180,49 @@ func (c *Cmd) Output() ([]byte, error) {
 	return stdout.Bytes(), err
 }
 
-func (c *Cmd) StderrPipe() (io.ReadCloser, error) { return nil, nil }
-func (c *Cmd) StdinPipe() (io.WriteCloser, error) { return nil, nil }
-func (c *Cmd) StdoutPipe() (io.ReadCloser, error) { return nil, nil }
+// StdinPipe returns a pipe that will be connected to the command's standard input
+// when the command starts.
+//
+// Different than os/exec.StdinPipe, returned io.WriteCloser should be closed by user.
+func (c *Cmd) StdinPipe() (io.WriteCloser, error) {
+	if c.Stdin != nil {
+		return nil, errors.New("dexec: Stdin already set")
+	}
+	pr, pw := io.Pipe()
+	c.Stdin = pr
+	return pw, nil
+}
+
+// StdoutPipe returns a pipe that will be connected to the command's standard output when
+// the command starts.
+//
+// Wait will close the pipe after seeing the command exit or in error conditions.
+func (c *Cmd) StdoutPipe() (io.ReadCloser, error) {
+	if c.Stdout != nil {
+		return nil, errors.New("dexec: Stdout already set")
+	}
+	pr, pw := io.Pipe()
+	c.Stdout = pw
+	c.closeAfterWait = append(c.closeAfterWait, pw)
+	return pr, nil
+}
+
+// StderrPipe returns a pipe that will be connected to the command's standard error when
+// the command starts.
+//
+// Wait will close the pipe after seeing the command exit or in error conditions.
+func (c *Cmd) StderrPipe() (io.ReadCloser, error) {
+	if c.Stderr != nil {
+		return nil, errors.New("dexec: Stderr already set")
+	}
+	pr, pw := io.Pipe()
+	c.Stderr = pw
+	c.closeAfterWait = append(c.closeAfterWait, pw)
+	return pr, nil
+}
+
+func closeFds(l []io.Closer) {
+	for _, fd := range l {
+		fd.Close()
+	}
+}
