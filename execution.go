@@ -9,12 +9,12 @@ import (
 )
 
 type Execution interface {
-	Create(d Docker, cmd []string) error
-	Run(d Docker, stdin io.Reader, stdout, stderr io.Writer) error
-	Wait(d Docker) (int, error)
+	create(d Docker, cmd []string) error
+	run(d Docker, stdin io.Reader, stdout, stderr io.Writer) error
+	wait(d Docker) (int, error)
 
-	SetEnv(env []string) error
-	SetDir(dir string) error
+	setEnv(env []string) error
+	setDir(dir string) error
 }
 
 type createContainer struct {
@@ -33,7 +33,7 @@ func ByCreatingContainer(opts docker.CreateContainerOptions) (Execution, error) 
 	return &createContainer{opt: opts}, nil
 }
 
-func (c *createContainer) SetEnv(env []string) error {
+func (c *createContainer) setEnv(env []string) error {
 	if len(c.opt.Config.Env) > 0 {
 		return errors.New("dexec: Config.Env already set")
 	}
@@ -41,7 +41,7 @@ func (c *createContainer) SetEnv(env []string) error {
 	return nil
 }
 
-func (c *createContainer) SetDir(dir string) error {
+func (c *createContainer) setDir(dir string) error {
 	if c.opt.Config.WorkingDir != "" {
 		return errors.New("dexec: Config.WorkingDir already set")
 	}
@@ -49,7 +49,7 @@ func (c *createContainer) SetDir(dir string) error {
 	return nil
 }
 
-func (c *createContainer) Create(d Docker, cmd []string) error {
+func (c *createContainer) create(d Docker, cmd []string) error {
 	c.cmd = cmd
 
 	if len(c.opt.Config.Cmd) > 0 {
@@ -76,7 +76,7 @@ func (c *createContainer) Create(d Docker, cmd []string) error {
 	return nil
 }
 
-func (c *createContainer) Run(d Docker, stdin io.Reader, stdout, stderr io.Writer) error {
+func (c *createContainer) run(d Docker, stdin io.Reader, stdout, stderr io.Writer) error {
 	if c.id == "" {
 		return errors.New("dexec: container is not created")
 	}
@@ -103,7 +103,7 @@ func (c *createContainer) Run(d Docker, stdin io.Reader, stdout, stderr io.Write
 	return nil
 }
 
-func (c *createContainer) Wait(d Docker) (exitCode int, err error) {
+func (c *createContainer) wait(d Docker) (exitCode int, err error) {
 	if c.cw == nil {
 		return -1, errors.New("dexec: container is not attached")
 	}

@@ -64,12 +64,12 @@ type Cmd struct {
 // Start starts the specified command but does not wait for it to complete.
 func (c *Cmd) Start() error {
 	if c.Dir != "" {
-		if err := c.Method.SetDir(c.Dir); err != nil {
+		if err := c.Method.setDir(c.Dir); err != nil {
 			return err
 		}
 	}
 	if c.Env != nil {
-		if err := c.Method.SetEnv(c.Env); err != nil {
+		if err := c.Method.setEnv(c.Env); err != nil {
 			return err
 		}
 	}
@@ -90,10 +90,10 @@ func (c *Cmd) Start() error {
 	}
 
 	cmd := append([]string{c.Path}, c.Args...)
-	if err := c.Method.Create(c.docker, cmd); err != nil {
+	if err := c.Method.create(c.docker, cmd); err != nil {
 		return err
 	}
-	if err := c.Method.Run(c.docker, c.Stdin, c.Stdout, c.Stderr); err != nil {
+	if err := c.Method.run(c.docker, c.Stdin, c.Stdout, c.Stderr); err != nil {
 		return err
 	}
 	return nil
@@ -111,7 +111,7 @@ func (c *Cmd) Wait() error {
 	if !c.started {
 		return errors.New("dexec: not started")
 	}
-	ec, err := c.Method.Wait(c.docker)
+	ec, err := c.Method.wait(c.docker)
 	if err != nil {
 		return err
 	}
