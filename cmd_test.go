@@ -411,6 +411,8 @@ func (s *CmdTestSuite) TestStdoutPipe(c *C) {
 func (s *CmdTestSuite) TestStdoutPipeJSONDecoding(c *C) {
 	// TODO this test does not use goroutines and follows os/exec pattern
 	// however 10% of the time it hangs. there's some timing issue somewhere.
+	c.Skip("not doing this in goroutines sometimes hangs nondeterministically")
+
 	cmd := s.d.Command(baseContainer(c), "echo", `{"Name":"Bob", "Age": 32}`)
 	r, err := cmd.StdoutPipe()
 	c.Assert(err, IsNil)
