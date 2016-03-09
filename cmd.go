@@ -9,6 +9,7 @@ import (
 )
 
 // Docker contains connection to Docker API.
+// Use github.com/fsouza/go-dockerclient to initialize *docker.Client.
 type Docker struct {
 	*docker.Client
 }
@@ -16,7 +17,7 @@ type Docker struct {
 // Command returns the Cmd struct to execute the named program with given
 // arguments using specified execution method.
 //
-// A new method instance should be used for each new Cmd.
+// For each new Cmd, you should create a new instance for "method" argument.
 func (d Docker) Command(method Execution, name string, arg ...string) *Cmd {
 	return &Cmd{Method: method, Path: name, Args: arg, docker: d}
 }
