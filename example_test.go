@@ -1,6 +1,7 @@
 package dexec_test
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/ahmetalpbalkan/dexec"
@@ -19,8 +20,7 @@ func ExampleCmd_Output() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("%s", b)
+	fmt.Printf("%s", b)
 
 	// Output: I am running inside a container!
-
 }

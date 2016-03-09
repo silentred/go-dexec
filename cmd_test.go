@@ -39,6 +39,8 @@ type CmdTestSuite struct {
 
 func (s *CmdTestSuite) SetUpSuite(c *C) {
 	s.d = dexec.Docker{testDocker(c)}
+	err := s.d.PullImage(docker.PullImageOptions{Repository: "busybox", Tag: "latest"}, docker.AuthConfiguration{})
+	c.Assert(err, IsNil)
 	cleanupContainers(c, s.d)
 }
 
@@ -338,7 +340,14 @@ func (s *CmdTestSuite) TestOutputExitErrorStderrCollected(c *C) {
 func (s *CmdTestSuite) TestLargeStdin(c *C) {
 	b := make([]byte, 100*1024*1024)
 	rnd := rand.New(rand.NewSource(1))
-	rnd.Read(b)
+	// cannot use rnd.Read(b) here because circleCI doesn't use go1.6 yet.
+	for i := 0; i < len(b); i += 7 {
+		val := rnd.Int63()
+		for j := 0; i+j < len(b) && j < 7; j++ {
+			b[i+j] = byte(val)
+		}
+		val >>= 8
+	}
 
 	// compute hash in memory
 	h := md5.New()

@@ -232,3 +232,9 @@ func closeFds(l []io.Closer) {
 		fd.Close()
 	}
 }
+
+type emptyReader struct{}
+
+func (r *emptyReader) Read(b []byte) (int, error) { return 0, io.EOF }
+
+var empty = &emptyReader{}
