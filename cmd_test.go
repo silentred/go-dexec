@@ -27,14 +27,18 @@ const testPrefix = "dexec_test_"
 
 func testContainer() string { return fmt.Sprintf("%s%d", testPrefix, rand.Int63()) }
 
+func testDocker(c *C) *docker.Client {
+	cl, err := docker.NewClient("unix:///var/run/docker.sock")
+	c.Assert(err, IsNil)
+	return cl
+}
+
 type CmdTestSuite struct {
 	d dexec.Docker
 }
 
 func (s *CmdTestSuite) SetUpSuite(c *C) {
-	cl, err := docker.NewClient("unix:///var/run/docker.sock")
-	c.Assert(err, IsNil)
-	s.d = dexec.Docker{cl}
+	s.d = dexec.Docker{testDocker(c)}
 	cleanupContainers(c, s.d)
 }
 
@@ -462,4 +466,40 @@ func (s *CmdTestSuite) TestStderrPipe(c *C) {
 		c.Assert(cmd.Run(), IsNil)
 	}()
 	wg.Wait()
+}
+
+func (s *CmdTestSuite) TestWaitDeletesContainer(c *C) {
+	opts := baseOpts()
+	e, err := dexec.ByCreatingContainer(opts)
+	c.Assert(err, IsNil)
+	name := opts.Name
+	c.Logf("container=%q", name)
+	cmd := s.d.Command(e, "date")
+	c.Assert(cmd.Start(), IsNil)
+
+	d := testDocker(c)
+	_, err = d.InspectContainer(name)
+	c.Assert(err, IsNil)
+
+	c.Assert(cmd.Wait(), IsNil)
+	_, err = d.InspectContainer(name)
+	c.Assert(err, NotNil)
+}
+
+func (s *CmdTestSuite) TestWaitDeletesContainerOnExitError(c *C) {
+	opts := baseOpts()
+	e, err := dexec.ByCreatingContainer(opts)
+	c.Assert(err, IsNil)
+	name := opts.Name
+	c.Logf("container=%q", name)
+	cmd := s.d.Command(e, "false")
+	c.Assert(cmd.Start(), IsNil)
+
+	d := testDocker(c)
+	_, err = d.InspectContainer(name)
+	c.Assert(err, IsNil)
+
+	c.Assert(cmd.Wait(), FitsTypeOf, &dexec.ExitError{})
+	_, err = d.InspectContainer(name)
+	c.Assert(err, NotNil)
 }

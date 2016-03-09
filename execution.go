@@ -26,6 +26,9 @@ type createContainer struct {
 
 // ByCreatingContainer is the execution strategy where a new container with specified
 // options is created to execute the command.
+//
+// The container will be created and started with Cmd.Start and will be deleted
+// before Cmd.Wait returns.
 func ByCreatingContainer(opts docker.CreateContainerOptions) (Execution, error) {
 	if opts.Config == nil {
 		return nil, errors.New("dexec: Config is nil")
@@ -104,6 +107,8 @@ func (c *createContainer) run(d Docker, stdin io.Reader, stdout, stderr io.Write
 }
 
 func (c *createContainer) wait(d Docker) (exitCode int, err error) {
+	del := func() error { return d.RemoveContainer(docker.RemoveContainerOptions{ID: c.id, Force: true}) }
+	defer del()
 	if c.cw == nil {
 		return -1, errors.New("dexec: container is not attached")
 	}
@@ -113,6 +118,9 @@ func (c *createContainer) wait(d Docker) (exitCode int, err error) {
 	ec, err := d.WaitContainer(c.id)
 	if err != nil {
 		return -1, fmt.Errorf("dexec: cannot wait for container: %v", err)
+	}
+	if err := del(); err != nil {
+		return -1, fmt.Errorf("dexec: error deleting container: %v", err)
 	}
 	return ec, nil
 }
