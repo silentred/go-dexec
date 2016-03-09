@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"io/ioutil"
 
 	"github.com/fsouza/go-dockerclient"
 )
@@ -22,6 +23,10 @@ func (d Docker) Command(method Execution, name string, arg ...string) *Cmd {
 	return &Cmd{Method: method, Path: name, Args: arg, docker: d}
 }
 
+// Cmd represents an external command being prepared or run.
+//
+// A Cmd cannot be reused after calling its Run, Output or CombinedOutput
+// methods.
 type Cmd struct {
 	// Method provides the execution strategy for the context of the Cmd.
 	// An instance of Method should not be reused between Cmds.
@@ -84,10 +89,10 @@ func (c *Cmd) Start() error {
 		c.Stdin = empty
 	}
 	if c.Stdout == nil {
-		c.Stdout = discard
+		c.Stdout = ioutil.Discard
 	}
 	if c.Stderr == nil {
-		c.Stderr = discard
+		c.Stderr = ioutil.Discard
 	}
 
 	cmd := append([]string{c.Path}, c.Args...)

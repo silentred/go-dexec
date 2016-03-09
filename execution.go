@@ -8,6 +8,8 @@ import (
 	"github.com/fsouza/go-dockerclient"
 )
 
+// Execution determines how the command is going to be executed. Currently
+// the only method is ByCreatingContainer.
 type Execution interface {
 	create(d Docker, cmd []string) error
 	run(d Docker, stdin io.Reader, stdout, stderr io.Writer) error
