@@ -21,6 +21,7 @@ Check out the following [examples](examples):
 - [Stream processing with pipes →](examples/300-pipes)
 - [Check exit code of a remote process →](examples/400-exit-code)
 - [Audio extraction from YouTube videos →](examples/500-video-processing)
+- [Parallel computation on Swarm →](examples/600-parallel-compute)
 
 ### A Short Example 
 

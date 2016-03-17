@@ -24,5 +24,11 @@ To run this example:
 Again, just 5 lines (after 4 examples, you’re not surprised, right?):
 
 ```diff
-
+> 	cl, _ := docker.NewClientFromEnv()
+> 	d := dexec.Docker{cl}
+> 
+> 	m, _ := dexec.ByCreatingContainer(docker.CreateContainerOptions{
+> 		Config: &docker.Config{Image: "vimagick/youtube-dl"}})
+< 	cmd := exec.Command("sh", "-c", fmt.Sprintf("youtube-dl %s -o - | ffmpeg -i pipe:0 -f mp3 pipe:1", url))
+> 	cmd := d.Command(m, "sh", "-c", fmt.Sprintf("youtube-dl %s -o - | ffmpeg -i pipe:0 -f mp3 pipe:1", url))
 ```
