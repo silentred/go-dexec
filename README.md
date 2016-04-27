@@ -1,4 +1,4 @@
-# dexec [![Circle CI](https://circleci.com/gh/ahmetalpbalkan/dexec.svg?style=svg&circle-token=8d44d40f5d14602f6d95705d88c3b2c7ecc9bff9)](https://circleci.com/gh/ahmetalpbalkan/dexec)[![GoDoc](https://godoc.org/github.com/ahmetalpbalkan/dexec?status.png)][godoc]
+# dexec [![GoDoc](https://godoc.org/github.com/ahmetalpbalkan/dexec?status.png)][godoc]
 
 
 `dexec` is a small Go library allowing you to run processes inside 
