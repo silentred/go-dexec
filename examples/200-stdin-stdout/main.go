@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/ahmetalpbalkan/dexec"
+	"github.com/ahmetalpbalkan/go-dexec"
 	"github.com/fsouza/go-dockerclient"
 	"os"
 	"strings"

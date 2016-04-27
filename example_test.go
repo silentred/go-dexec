@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/ahmetalpbalkan/dexec"
+	"github.com/ahmetalpbalkan/go-dexec"
 	"github.com/fsouza/go-dockerclient"
 )
 
