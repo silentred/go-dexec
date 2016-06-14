@@ -59,7 +59,7 @@ Output: `I am running inside a container!`
 ### Use Cases
 
 This library is intended for providing an execution model that looks and feels
-like [`os/exec`][osexec] pacakage.
+like [`os/exec`][osexec] package.
 
 You might want to use this library when:
 
