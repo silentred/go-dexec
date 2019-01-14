@@ -159,31 +159,24 @@ func (c *createContainer) wait(d Docker) (exitCode int, err error) {
 		return -1, errors.New("dexec: container is not attached")
 	}
 
-	// if err = c.cw.Wait(); err != nil {
-	// 	return -1, fmt.Errorf("dexec: attach error: %v", err)
-	// }
-
-	// ec, err := d.WaitContainer(c.id)
-	// if err != nil {
-	// 	return -1, fmt.Errorf("dexec: cannot wait for container: %v", err)
-	// }
-
 	// keep copying stdin to container
 	// var quit = make(chan int, 1)
 	go func() {
 		// fmt.Println("copy stdin to remote conn")
-		_, ioErr := io.Copy(c.hr.Conn, c.stdin)
-		if ioErr != nil {
-			fmt.Println(ioErr)
+		if c.stdin != nil && c.hr.Conn != nil {
+			_, ioErr := io.Copy(c.hr.Conn, c.stdin)
+			if ioErr != nil {
+				fmt.Println(ioErr)
+			}
+			c.hr.CloseWrite()
 		}
-		// fmt.Println("next round")
-		// fmt.Println("quit, close hijacker")
-		c.hr.CloseWrite()
 	}()
 
-	_, err = stdcopy.StdCopy(c.stdout, c.stderr, c.hr.Reader)
-	if err != nil {
-		return -1, fmt.Errorf("dexec: attach error: %v", err)
+	if c.hr.Reader != nil {
+		_, err = stdcopy.StdCopy(c.stdout, c.stderr, c.hr.Reader)
+		if err != nil {
+			return -1, fmt.Errorf("dexec: attach error: %v", err)
+		}
 	}
 
 	var statusCode int64
@@ -191,9 +184,6 @@ func (c *createContainer) wait(d Docker) (exitCode int, err error) {
 	if err != nil {
 		return -1, fmt.Errorf("dexec: cannot wait for container: %v", err)
 	}
-	// fmt.Println("wait container")
-
-	// quit <- 1
 
 	if err := del(); err != nil {
 		return -1, fmt.Errorf("dexec: error deleting container: %v", err)
