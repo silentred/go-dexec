@@ -6,7 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/fsouza/go-dockerclient"
+	docker "github.com/docker/docker/client"
 )
 
 // Docker contains connection to Docker API.

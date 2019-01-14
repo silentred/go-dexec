@@ -1,4 +1,4 @@
-# dexec [![GoDoc](https://godoc.org/github.com/ahmetalpbalkan/dexec?status.png)][godoc]
+# dexec [![GoDoc](https://godoc.org/github.com/silentred/dexec?status.png)][godoc]
 
 
 `dexec` is a small Go library allowing you to run processes inside 
@@ -18,7 +18,7 @@ Check out the following [examples](examples):
 
 - [Hello, world inside container →](examples/100-hello)
 - [Connect to container’s `STDIN`/`STDOUT` →](examples/200-stdin-stdout)
-- [Stream processing with pipes →](examples/300-pipes)
+- [Stream processing with pipes →](examples/300-pipes) Cannot pass the test case. Blockling at ContainerAttach().
 - [Check exit code of a remote process →](examples/400-exit-code)
 - [Audio extraction from YouTube videos →](examples/500-video-processing)
 - [Parallel computation on Swarm →](examples/600-parallel-compute)
@@ -34,24 +34,28 @@ Here is a minimal Go program that runs `echo` in a container:
 package main
 
 import (
-	"log"
+	"fmt"
 
-	"github.com/ahmetalpbalkan/dexec"
-	"github.com/fsouza/go-dockerclient"
+	containertypes "github.com/docker/docker/api/types/container"
+	docker "github.com/docker/docker/client"
+	dexec "github.com/silentred/go-dexec"
 )
 
-func main(){
-	cl, _ := docker.NewClient("unix:///var/run/docker.sock")
+func main() {
+	cl, _ := docker.NewEnvClient()
 	d := dexec.Docker{cl}
 
-	m, _ := dexec.ByCreatingContainer(docker.CreateContainerOptions{
-	Config: &docker.Config{Image: "busybox"}})
-
+	m, _ := dexec.ByCreatingContainer(dexec.CreateContainerOption{
+		Config: &containertypes.Config{Image: "busybox"}},
+	)
 	cmd := d.Command(m, "echo", `I am running inside a container!`)
 	b, err := cmd.Output()
-	if err != nil { log.Fatal(err) }
-	log.Printf("%s", b)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%s", b)
 }
+
 ```
 
 Output: `I am running inside a container!`

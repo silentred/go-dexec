@@ -1,11 +1,15 @@
 package dexec
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 
-	"github.com/fsouza/go-dockerclient"
+	types "github.com/docker/docker/api/types"
+	containertypes "github.com/docker/docker/api/types/container"
+	networktypes "github.com/docker/docker/api/types/network"
+	"github.com/moby/moby/pkg/stdcopy"
 )
 
 // Execution determines how the command is going to be executed. Currently
@@ -19,11 +23,26 @@ type Execution interface {
 	setDir(dir string) error
 }
 
+type CreateContainerOption struct {
+	ContainerName    string
+	Config           *containertypes.Config
+	HostConfig       *containertypes.HostConfig
+	NetworkingConfig *networktypes.NetworkingConfig
+}
+
+type AttachContainerOption struct {
+	ContainerID string
+	AttachOpt   types.ContainerAttachOptions
+}
+
 type createContainer struct {
-	opt docker.CreateContainerOptions
+	opt CreateContainerOption
 	cmd []string
 	id  string // created container id
-	cw  docker.CloseWaiter
+	// cw  *docker.Client
+	stdin          io.Reader
+	stdout, stderr io.Writer
+	hr             types.HijackedResponse
 }
 
 // ByCreatingContainer is the execution strategy where a new container with specified
@@ -31,7 +50,7 @@ type createContainer struct {
 //
 // The container will be created and started with Cmd.Start and will be deleted
 // before Cmd.Wait returns.
-func ByCreatingContainer(opts docker.CreateContainerOptions) (Execution, error) {
+func ByCreatingContainer(opts CreateContainerOption) (Execution, error) {
 	if opts.Config == nil {
 		return nil, errors.New("dexec: Config is nil")
 	}
@@ -72,7 +91,8 @@ func (c *createContainer) create(d Docker, cmd []string) error {
 	c.opt.Config.Cmd = nil        // clear cmd
 	c.opt.Config.Entrypoint = cmd // set new entrypoint
 
-	container, err := d.Client.CreateContainer(c.opt)
+	ctx := context.Background()
+	container, err := d.Client.ContainerCreate(ctx, c.opt.Config, c.opt.HostConfig, c.opt.NetworkingConfig, c.opt.ContainerName)
 	if err != nil {
 		return fmt.Errorf("dexec: failed to create container: %v", err)
 	}
@@ -82,47 +102,104 @@ func (c *createContainer) create(d Docker, cmd []string) error {
 }
 
 func (c *createContainer) run(d Docker, stdin io.Reader, stdout, stderr io.Writer) error {
+	// fmt.Println("runing...", c.id)
 	if c.id == "" {
 		return errors.New("dexec: container is not created")
 	}
-	if err := d.Client.StartContainer(c.id, nil); err != nil {
+	ctx := context.Background()
+	if err := d.Client.ContainerStart(ctx, c.id, types.ContainerStartOptions{}); err != nil {
 		return fmt.Errorf("dexec: failed to start container:  %v", err)
 	}
 
-	opts := docker.AttachToContainerOptions{
-		Container:    c.id,
-		Stdin:        true,
-		Stdout:       true,
-		Stderr:       true,
-		InputStream:  stdin,
-		OutputStream: stdout,
-		ErrorStream:  stderr,
-		Stream:       true,
-		Logs:         true, // include produced output so far
+	c.stdin = stdin
+	c.stdout = stdout
+	c.stderr = stderr
+
+	opts := AttachContainerOption{
+		ContainerID: c.id,
+		AttachOpt: types.ContainerAttachOptions{
+			Stdin:  true,
+			Stdout: true,
+			Stderr: true,
+			Logs:   true,
+			Stream: true,
+		},
 	}
-	cw, err := d.Client.AttachToContainerNonBlocking(opts)
+
+	// opts := docker.AttachToContainerOptions{
+	// 	Container:    c.id,
+	// 	Stdin:        true,
+	// 	Stdout:       true,
+	// 	Stderr:       true,
+	// 	InputStream:  stdin,
+	// 	OutputStream: stdout,
+	// 	ErrorStream:  stderr,
+	// 	Stream:       true,
+	// 	Logs:         true, // include produced output so far
+	// }
+	// fmt.Println("attach...")
+
+	hijackResp, err := d.Client.ContainerAttach(ctx, opts.ContainerID, opts.AttachOpt)
 	if err != nil {
 		return fmt.Errorf("dexec: failed to attach container: %v", err)
 	}
-	c.cw = cw
+	c.hr = hijackResp
 	return nil
 }
 
 func (c *createContainer) wait(d Docker) (exitCode int, err error) {
-	del := func() error { return d.RemoveContainer(docker.RemoveContainerOptions{ID: c.id, Force: true}) }
+	// fmt.Println("waiting...", c.id)
+	del := func() error {
+		return d.ContainerRemove(context.Background(), c.id, types.ContainerRemoveOptions{Force: true})
+		// return d.RemoveContainer(docker.RemoveContainerOptions{ID: c.id, Force: true})
+	}
 	defer del()
-	if c.cw == nil {
+	if c.hr.Conn == nil {
 		return -1, errors.New("dexec: container is not attached")
 	}
-	if err = c.cw.Wait(); err != nil {
+
+	// if err = c.cw.Wait(); err != nil {
+	// 	return -1, fmt.Errorf("dexec: attach error: %v", err)
+	// }
+
+	// ec, err := d.WaitContainer(c.id)
+	// if err != nil {
+	// 	return -1, fmt.Errorf("dexec: cannot wait for container: %v", err)
+	// }
+
+	// keep copying stdin to container
+	// var quit = make(chan int, 1)
+	go func() {
+		_, ioErr := io.Copy(c.hr.Conn, c.stdin)
+		if ioErr != nil {
+			fmt.Println(ioErr)
+		}
+		// fmt.Println("next round")
+		// fmt.Println("quit, close hijacker")
+		c.hr.CloseWrite()
+	}()
+
+	// fmt.Println("start stdcopy")
+
+	_, err = stdcopy.StdCopy(c.stdout, c.stderr, c.hr.Reader)
+	if err != nil {
 		return -1, fmt.Errorf("dexec: attach error: %v", err)
 	}
-	ec, err := d.WaitContainer(c.id)
+	// fmt.Println("copy over")
+
+	var statusCode int64
+	statusCode, err = d.Client.ContainerWait(context.Background(), c.id)
 	if err != nil {
 		return -1, fmt.Errorf("dexec: cannot wait for container: %v", err)
 	}
+	// fmt.Println("wait container")
+
+	// quit <- 1
+
 	if err := del(); err != nil {
 		return -1, fmt.Errorf("dexec: error deleting container: %v", err)
 	}
-	return ec, nil
+
+	exitCode = int(statusCode)
+	return exitCode, nil
 }

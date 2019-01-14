@@ -2,15 +2,19 @@ package main
 
 import (
 	"fmt"
-	"github.com/ahmetalpbalkan/go-dexec"
-	"github.com/fsouza/go-dockerclient"
+
+	containertypes "github.com/docker/docker/api/types/container"
+	docker "github.com/docker/docker/client"
+	dexec "github.com/silentred/go-dexec"
 )
 
 func main() {
-	cl, _ := docker.NewClientFromEnv()
+	cl, _ := docker.NewEnvClient()
 	d := dexec.Docker{cl}
-	m, _ := dexec.ByCreatingContainer(docker.CreateContainerOptions{
-		Config: &docker.Config{Image: "busybox"}})
+
+	m, _ := dexec.ByCreatingContainer(dexec.CreateContainerOption{
+		Config: &containertypes.Config{Image: "busybox"}},
+	)
 
 	cmd := d.Command(m, "sh", "-c", "exit 255;")
 	err := cmd.Run()

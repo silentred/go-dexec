@@ -1,22 +1,39 @@
 package main
 
 import (
-	"github.com/ahmetalpbalkan/go-dexec"
-	"github.com/fsouza/go-dockerclient"
 	"os"
 	"strings"
+
+	containertypes "github.com/docker/docker/api/types/container"
+	docker "github.com/docker/docker/client"
+	dexec "github.com/silentred/go-dexec"
 )
 
 func main() {
 	input := `Hello world
 from
-container`
+container
+container
+container
+container
+container
+container
+container
+asdf
+asdf
+asdf
+asdf
+asdf
+asdf
+asdf
+`
 
-	cl, _ := docker.NewClientFromEnv()
+	cl, _ := docker.NewEnvClient()
 	d := dexec.Docker{cl}
 
-	m, _ := dexec.ByCreatingContainer(docker.CreateContainerOptions{
-		Config: &docker.Config{Image: "busybox"}})
+	m, _ := dexec.ByCreatingContainer(dexec.CreateContainerOption{
+		Config: &containertypes.Config{Image: "busybox"}},
+	)
 
 	cmd := d.Command(m, "tr", "[:lower:]", "[:upper:]")
 	cmd.Stdin = strings.NewReader(input) // <--

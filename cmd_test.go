@@ -12,8 +12,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ahmetalpbalkan/go-dexec"
-	"github.com/fsouza/go-dockerclient"
+	docker "github.com/docker/docker/client"
+	dexec "github.com/silentred/go-dexec"
 	. "gopkg.in/check.v1"
 )
 
