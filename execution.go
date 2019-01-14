@@ -144,6 +144,7 @@ func (c *createContainer) run(d Docker, stdin io.Reader, stdout, stderr io.Write
 		return fmt.Errorf("dexec: failed to attach container: %v", err)
 	}
 	c.hr = hijackResp
+	// fmt.Println("after attach...")
 	return nil
 }
 
@@ -170,6 +171,7 @@ func (c *createContainer) wait(d Docker) (exitCode int, err error) {
 	// keep copying stdin to container
 	// var quit = make(chan int, 1)
 	go func() {
+		// fmt.Println("copy stdin to remote conn")
 		_, ioErr := io.Copy(c.hr.Conn, c.stdin)
 		if ioErr != nil {
 			fmt.Println(ioErr)
@@ -179,13 +181,10 @@ func (c *createContainer) wait(d Docker) (exitCode int, err error) {
 		c.hr.CloseWrite()
 	}()
 
-	// fmt.Println("start stdcopy")
-
 	_, err = stdcopy.StdCopy(c.stdout, c.stderr, c.hr.Reader)
 	if err != nil {
 		return -1, fmt.Errorf("dexec: attach error: %v", err)
 	}
-	// fmt.Println("copy over")
 
 	var statusCode int64
 	statusCode, err = d.Client.ContainerWait(context.Background(), c.id)

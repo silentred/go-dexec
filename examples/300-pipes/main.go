@@ -28,10 +28,12 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Fprintln(w, "Hello world") // <--
-	fmt.Fprintln(w, "from")        // <--
-	fmt.Fprintln(w, "container")   // <--
-	w.Close()
+	go func() {
+		fmt.Fprintln(w, "Hello world") // <--
+		fmt.Fprintln(w, "from")        // <--
+		fmt.Fprintln(w, "container")   // <--
+		w.Close()
+	}()
 
 	if err := cmd.Wait(); err != nil {
 		panic(err)

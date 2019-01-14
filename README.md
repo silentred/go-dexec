@@ -18,7 +18,7 @@ Check out the following [examples](examples):
 
 - [Hello, world inside container →](examples/100-hello)
 - [Connect to container’s `STDIN`/`STDOUT` →](examples/200-stdin-stdout)
-- [Stream processing with pipes →](examples/300-pipes) Cannot pass the test case. Blockling at ContainerAttach().
+- [Stream processing with pipes →](examples/300-pipes)
 - [Check exit code of a remote process →](examples/400-exit-code)
 - [Audio extraction from YouTube videos →](examples/500-video-processing)
 - [Parallel computation on Swarm →](examples/600-parallel-compute)
