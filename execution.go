@@ -9,7 +9,7 @@ import (
 	types "github.com/docker/docker/api/types"
 	containertypes "github.com/docker/docker/api/types/container"
 	networktypes "github.com/docker/docker/api/types/network"
-	"github.com/moby/moby/pkg/stdcopy"
+	"github.com/docker/docker/pkg/stdcopy"
 )
 
 // Execution determines how the command is going to be executed. Currently
@@ -180,9 +180,20 @@ func (c *createContainer) wait(d Docker) (exitCode int, err error) {
 	}
 
 	var statusCode int64
-	statusCode, err = d.Client.ContainerWait(context.Background(), c.id)
-	if err != nil {
-		return -1, fmt.Errorf("dexec: cannot wait for container: %v", err)
+	var waitOkBodyChan <-chan containertypes.ContainerWaitOKBody
+	var errChan <-chan error
+	waitOkBodyChan, errChan = d.Client.ContainerWait(context.Background(), c.id, containertypes.WaitConditionNotRunning)
+	select {
+	case err = <-errChan:
+		if err != nil {
+			return -1, fmt.Errorf("dexec: cannot wait for container: %v", err)
+		}
+	case waitBody := <-waitOkBodyChan:
+		statusCode = waitBody.StatusCode
+		if waitBody.Error != nil {
+			err = fmt.Errorf(waitBody.Error.Message)
+			return -1, fmt.Errorf("dexec: cannot wait for container: %v", err)
+		}
 	}
 
 	if err := del(); err != nil {
